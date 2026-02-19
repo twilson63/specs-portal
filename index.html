@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="arweave">
+<head>
+  <meta charset="utf-8">
+  <title>SPECS - HyperBEAM Native</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind + DaisyUI CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- EasyMDE for markdown editor -->
+  <link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+  
+  <!-- Marked for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <style>
+    /* Arweave theme */
+    [data-theme="arweave"] {
+      --p: 210 100% 50%;
+      --pf: 210 100% 40%;
+      --pc: 0 0% 100%;
+      --s: 280 60% 50%;
+      --sf: 280 60% 40%;
+      --sc: 0 0% 100%;
+      --a: 150 60% 45%;
+      --af: 150 60% 35%;
+      --ac: 0 0% 100%;
+      --n: 220 15% 20%;
+      --nf: 220 15% 15%;
+      --nc: 0 0% 90%;
+      --b1: 0 0% 100%;
+      --b2: 0 0% 98%;
+      --b3: 0 0% 95%;
+      --bc: 220 15% 20%;
+      --in: 210 100% 50%;
+      --su: 150 60% 45%;
+      --wa: 40 100% 50%;
+      --er: 0 100% 60%;
+    }
+    
+    body {
+      font-family: 'Poppins', sans-serif;
+    }
+    
+    code, pre, .font-mono {
+      font-family: 'Roboto Mono', monospace;
+    }
+    
+    .markdown-content h1 { font-size: 2em; font-weight: 700; margin: 0.5em 0; }
+    .markdown-content h2 { font-size: 1.5em; font-weight: 600; margin: 0.5em 0; }
+    .markdown-content h3 { font-size: 1.25em; font-weight: 600; margin: 0.5em 0; }
+    .markdown-content p { margin: 1em 0; line-height: 1.75; }
+    .markdown-content pre { 
+      background: oklch(var(--n) / 1); 
+      color: oklch(var(--nc) / 1); 
+      padding: 1em; 
+      border-radius: 0.5rem; 
+      overflow-x: auto;
+    }
+    .markdown-content code { 
+      font-family: 'Roboto Mono', monospace;
+      background: oklch(var(--b2) / 1); 
+      padding: 0.2em 0.4em; 
+      border-radius: 0.25rem; 
+    }
+    .markdown-content ul, .markdown-content ol { padding-left: 2em; margin: 1em 0; }
+    .markdown-content li { margin: 0.25em 0; }
+    .markdown-content blockquote { 
+      border-left: 4px solid oklch(var(--p) / 1); 
+      padding-left: 1em; 
+      margin: 1em 0;
+      color: oklch(var(--bc) / 0.7);
+    }
+    .markdown-content a { color: oklch(var(--p) / 1); text-decoration: underline; }
+    
+    .fade-in {
+      animation: fadeIn 0.7s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body data-theme="arweave">
+  <!-- Main App Layout -->
+  <div id="app" class="drawer drawer-mobile lg:drawer-open">
+    <input id="drawer-toggle" type="checkbox" class="drawer-toggle" />
+    
+    <!-- Main Content -->
+    <div class="drawer-content flex flex-col items-center justify-start">
+      <div id="main-content" class="w-full md:w-4/5 border-l border-r border-slate-300 min-h-screen">
+        <!-- Nav -->
+        <nav id="top-nav" class="flex py-4 px-4 sticky top-0 bg-white border-b border-slate-300 items-center justify-between lg:justify-end z-10">
+          <!-- Dynamic nav content -->
+        </nav>
+        
+        <!-- Page Content -->
+        <div id="page-content" class="p-4">
+          <div class="text-center py-8">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="drawer-side">
+      <label for="drawer-toggle" class="drawer-overlay"></label>
+      <aside id="sidebar" class="menu bg-base-100 w-80 h-screen">
+        <!-- Sidebar content -->
+      </aside>
+    </div>
+    
+    <!-- Modals -->
+    <div id="modals"></div>
+  </div>
+
+  <!-- App Script -->
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
