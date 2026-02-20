@@ -4,6 +4,7 @@
 
 /**
  * Parse Arweave tags array into object
+ * Handles ANS-110 tag format
  */
 export function parseTags(tags) {
   const result = {};
@@ -13,14 +14,22 @@ export function parseTags(tags) {
   for (const tag of tags) {
     let value = tag.value;
     
-    // Parse comma-separated arrays
-    if (tag.name === 'Spec-Topics' || tag.name === 'Spec-Authors') {
+    // Parse comma-separated arrays (ANS-110 Topics, Authors)
+    if (tag.name === 'Topics' || tag.name === 'Authors' || tag.name === 'Forks') {
       value = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
     }
     
-    // Strip Spec- prefix for cleaner access
-    const key = tag.name.replace('Spec-', '');
-    result[key] = value;
+    // Handle legacy Spec- prefixed tags (backward compatibility)
+    if (tag.name.startsWith('Spec-')) {
+      const key = tag.name.replace('Spec-', '');
+      if (key === 'Topics' || key === 'Authors') {
+        result[key] = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+      } else {
+        result[key] = value;
+      }
+    } else {
+      result[tag.name] = value;
+    }
   }
   
   return result;
@@ -28,24 +37,29 @@ export function parseTags(tags) {
 
 /**
  * Create tags array from metadata object
+ * Uses ANS-110 format
  */
 export function createTags(metadata) {
   const tags = [
     { name: 'Content-Type', value: 'text/markdown' },
+    { name: 'Type', value: 'spec' },
     { name: 'App-Name', value: 'Specs-Portal' },
-    { name: 'Spec-Type', value: 'spec' },
-    { name: 'Spec-Version', value: '1.0.0' },
+    { name: 'App-Version', value: '2.0.0' },
     { name: 'Timestamp', value: Date.now().toString() }
   ];
   
-  Object.entries(metadata).forEach(([key, value]) => {
-    if (value !== null && value !== undefined && value !== '') {
-      tags.push({
-        name: `Spec-${key}`,
-        value: Array.isArray(value) ? value.join(',') : value.toString()
-      });
-    }
-  });
+  // ANS-110 required
+  if (metadata.title) tags.push({ name: 'Title', value: metadata.title });
+  
+  // ANS-110 optional
+  if (metadata.description) tags.push({ name: 'Description', value: metadata.description });
+  if (metadata.topics?.length) tags.push({ name: 'Topics', value: metadata.topics.join(',') });
+  
+  // Additional metadata
+  if (metadata.variant) tags.push({ name: 'Variant', value: metadata.variant });
+  if (metadata.group) tags.push({ name: 'GroupId', value: metadata.group });
+  if (metadata.authors?.length) tags.push({ name: 'Authors', value: metadata.authors.join(',') });
+  if (metadata.fork) tags.push({ name: 'Forks', value: metadata.fork });
   
   return tags;
 }

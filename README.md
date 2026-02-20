@@ -1,13 +1,28 @@
 # SPECS Portal - HyperBEAM Native
 
 A fully decentralized specification portal built on Arweave and HyperBEAM.
+Uses [ANS-110](https://cookbook.arweave.net/references/specs/ans/ANS-110.html) for spec discoverability.
 
 ## Features
 
+- **ANS-110 Compliant** - Uses `Type: spec` for universal spec discovery
 - **Pure Vanilla JS** - No framework dependencies
 - **HyperBEAM GraphQL** - Direct queries to HyperBEAM's `~query@1.0/graphql` device
 - **Arweave Storage** - Specs stored permanently on Arweave
 - **Wander Wallet** - Connect your Arweave wallet to create and stamp specs
+
+## ANS-110 Tag Schema
+
+| Tag | Required | Description |
+|-----|----------|-------------|
+| `Type` | Yes | Must be `spec` |
+| `Title` | Yes | Human-readable spec name (max 150 chars) |
+| `Description` | No | Detailed description (max 300 chars) |
+| `Topics` | No | Comma-separated topics for filtering |
+| `Authors` | No | Comma-separated wallet addresses |
+| `Variant` | No | Version string (e.g., `1.0.0`) |
+| `GroupId` | No | Group/protocol name |
+| `Forks` | No | Parent spec transaction ID (for forked specs) |
 
 ## Architecture
 
@@ -76,30 +91,31 @@ specs-native/
 └── README.md
 ```
 
-## Data Model
+## Data Model (ANS-110 Compliant)
 
 ### Spec Transaction Tags
 ```
 Content-Type: text/markdown
+Type: spec
+Title: My Protocol Specification
+Description: Brief description of the spec
+Topics: protocol,defi,arweave
+Authors: wallet-address-1,wallet-address-2
+Variant: 1.0.0
+GroupId: my-protocol
+Forks: parent-spec-tx-id (optional)
 App-Name: Specs-Portal
-Spec-Type: spec
-Spec-Version: 1.0.0
-Spec-Title: My Protocol Specification
-Spec-Group: my-protocol
-Spec-Variant: 1.0.0
-Spec-Description: Brief description
-Spec-Topics: protocol,defi,arweave
-Spec-Authors: wallet-address-1,wallet-address-2
-Spec-Fork: parent-spec-tx-id (optional)
+App-Version: 2.0.0
 Timestamp: 1708300000
 ```
 
 ### Stamp Transaction Tags
 ```
 Content-Type: application/json
+Type: stamp
+Ref: target-spec-tx-id
 App-Name: Specs-Portal
-Spec-Type: stamp
-Spec-Ref: target-spec-tx-id
+App-Version: 2.0.0
 Timestamp: 1708300000
 ```
 
@@ -135,11 +151,11 @@ rebar3 compile
 rebar3 shell
 ```
 
-### Test GraphQL
+### Test GraphQL (ANS-110 query)
 ```bash
 curl -X POST http://localhost:10000/~query@1.0/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ transactions(first: 5) { edges { node { id } } } }"}'
+  -d '{"query": "query { transactions(first: 5, tags: [{name: \"Type\", values: [\"spec\"]}]) { edges { node { id tags { name value } } } } }"}'
 ```
 
 ## License

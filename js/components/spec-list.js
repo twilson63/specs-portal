@@ -1,7 +1,7 @@
 /**
  * Spec List Component
  */
-import { getSpecs, getStampCount } from '../gql.js';
+import { getSpecs, getStampCounts, deduplicateSpecs } from '../gql.js';
 import { parseTags, formatTimestamp, shortHash } from '../utils.js';
 
 /**
@@ -17,11 +17,15 @@ export async function renderSpecList(container, onLoadMore) {
   `;
   
   try {
-    const result = await getSpecs(20);
-    const specs = result.edges;
-    const hasNextPage = result.pageInfo?.hasNextPage;
+    const result = await getSpecs(50); // Fetch more to deduplicate
+    const specs = deduplicateSpecs(result.edges); // Deduplicate by GroupId/Title
+    const hasNextPage = false; // Disable pagination when deduplicating (handled client-side)
     
-    renderSpecs(container, specs, hasNextPage, onLoadMore);
+    // Batch fetch stamp counts for all specs
+    const specIds = specs.map(edge => edge.node.id);
+    const stampCounts = await getStampCounts(specIds);
+    
+    renderSpecs(container, specs, stampCounts, hasNextPage, onLoadMore);
     
   } catch (err) {
     container.innerHTML = `
@@ -41,7 +45,7 @@ export async function renderSpecList(container, onLoadMore) {
 /**
  * Render the list of spec cards
  */
-function renderSpecs(container, specs, hasNextPage, onLoadMore) {
+function renderSpecs(container, specs, stampCounts, hasNextPage, onLoadMore) {
   if (specs.length === 0) {
     container.innerHTML = `
       <div class="text-center py-16">
@@ -54,7 +58,7 @@ function renderSpecs(container, specs, hasNextPage, onLoadMore) {
   }
   
   container.innerHTML = `
-    ${specs.map(edge => renderSpecCard(edge.node)).join('')}
+    ${specs.map(edge => renderSpecCard(edge.node, stampCounts)).join('')}
     ${hasNextPage ? `
       <div class="text-center py-4">
         <button id="load-more-btn" class="btn btn-outline">Load More</button>
@@ -77,13 +81,13 @@ function renderSpecs(container, specs, hasNextPage, onLoadMore) {
 }
 
 /**
- * Render individual spec card
+ * Render individual spec card (ANS-110 compliant)
  */
-function renderSpecCard(node) {
+function renderSpecCard(node, stampCounts = {}) {
   const tags = parseTags(node.tags);
   const date = formatTimestamp(node.block?.timestamp || tags.Timestamp);
   const height = node.block?.height || 'Pending';
-  const stamps = tags.Stamps || 0;
+  const stamps = stampCounts[node.id] || 0;
   
   return `
     <div class="spec-card pt-4 border-b-2 border-slate-200 hover:bg-gray-50 cursor-pointer" data-id="${node.id}">
@@ -92,7 +96,7 @@ function renderSpecCard(node) {
           <div class="flex items-center space-x-1">
             <h1 class="pl-2 md:pl-8 text-xl text-primary">
               ${escapeHtml(tags.Title || 'Untitled')}
-              ${tags.Group ? `<span class="text-gray-500 text-base ml-2">(${escapeHtml(tags.Group)})</span>` : ''}
+              ${tags.GroupId ? `<span class="text-gray-500 text-base ml-2">(${escapeHtml(tags.GroupId)})</span>` : ''}
             </h1>
           </div>
           <div>
@@ -139,41 +143,10 @@ function escapeHtml(text) {
 
 /**
  * Append more specs (for pagination)
+ * Note: pagination is handled via client-side deduplication with more results
  */
 export async function appendSpecs(container, cursor, onDone) {
-  try {
-    const result = await getSpecs(20, cursor);
-    const listEl = container.querySelector('#spec-list');
-    
-    // Remove old load more button
-    const oldBtn = container.querySelector('#load-more-btn');
-    if (oldBtn) oldBtn.parentElement.remove();
-    
-    // Append new specs
-    result.edges.forEach(edge => {
-      listEl.insertAdjacentHTML('beforeend', renderSpecCard(edge.node));
-    });
-    
-    // Add new load more if needed
-    if (result.pageInfo?.hasNextPage) {
-      listEl.insertAdjacentHTML('beforeend', `
-        <div class="text-center py-4">
-          <button id="load-more-btn" class="btn btn-outline">Load More</button>
-        </div>
-      `);
-    }
-    
-    // Re-add click handlers
-    listEl.querySelectorAll('.spec-card:not([data-has-handler])').forEach(card => {
-      card.dataset.hasHandler = 'true';
-      card.addEventListener('click', () => {
-        window.location.hash = `/spec/${card.dataset.id}`;
-      });
-    });
-    
-    onDone(result.pageInfo?.hasNextPage, result.edges[result.edges.length - 1]?.cursor);
-    
-  } catch (err) {
-    console.error('Failed to load more:', err);
-  }
+  // Pagination disabled - all deduplication happens client-side
+  // This function kept for API compatibility
+  onDone(false, null);
 }

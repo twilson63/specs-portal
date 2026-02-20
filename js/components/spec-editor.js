@@ -71,7 +71,7 @@ export async function renderSpecEditor(container, forkId = null, state) {
         <!-- Title -->
         <div class="form-control">
           <label class="label">
-            <span class="label-text font-semibold">Title *</span>
+            <span class="label-text font-semibold">Title * (ANS-110)</span>
           </label>
           <input 
             type="text" 
@@ -80,27 +80,27 @@ export async function renderSpecEditor(container, forkId = null, state) {
             placeholder="My Protocol Specification"
             value="${escapeHtml(forkTags.Title || '')}"
             required
+            maxlength="150"
           />
         </div>
         
-        <!-- Group and Variant -->
+        <!-- GroupId and Variant -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control">
             <label class="label">
-              <span class="label-text font-semibold">Group *</span>
+              <span class="label-text font-semibold">GroupId</span>
             </label>
             <input 
               type="text" 
               name="group" 
               class="input input-bordered w-full" 
               placeholder="my-protocol"
-              value="${escapeHtml(forkTags.Group || '')}"
-              required
+              value="${escapeHtml(forkTags.GroupId || '')}"
             />
           </div>
           <div class="form-control">
             <label class="label">
-              <span class="label-text font-semibold">Variant *</span>
+              <span class="label-text font-semibold">Variant</span>
             </label>
             <input 
               type="text" 
@@ -108,7 +108,6 @@ export async function renderSpecEditor(container, forkId = null, state) {
               class="input input-bordered w-full" 
               placeholder="1.0.0"
               value="${escapeHtml(forkTags.Variant || '1.0.0')}"
-              required
             />
           </div>
         </div>
@@ -116,20 +115,21 @@ export async function renderSpecEditor(container, forkId = null, state) {
         <!-- Description -->
         <div class="form-control">
           <label class="label">
-            <span class="label-text font-semibold">Description</span>
+            <span class="label-text font-semibold">Description (ANS-110)</span>
           </label>
           <textarea 
             name="description" 
             class="textarea textarea-bordered w-full" 
             rows="2"
-            placeholder="Brief description of this specification"
+            placeholder="Brief description of this specification (max 300 chars)"
+            maxlength="300"
           >${escapeHtml(forkTags.Description || '')}</textarea>
         </div>
         
         <!-- Topics -->
         <div class="form-control">
           <label class="label">
-            <span class="label-text font-semibold">Topics (comma-separated)</span>
+            <span class="label-text font-semibold">Topics (comma-separated, ANS-110)</span>
           </label>
           <input 
             type="text" 

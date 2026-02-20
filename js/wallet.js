@@ -90,27 +90,31 @@ function handleWalletSwitch(event) {
 
 /**
  * Create and post a new spec transaction
+ * Uses ANS-110 for spec discoverability
+ * https://cookbook.arweave.net/references/specs/ans/ANS-110.html
  */
 export async function createSpec(content, metadata) {
   if (!address) throw new Error('Wallet not connected');
   
   const tx = await arweave.createTransaction({ data: content });
   
-  // Required tags
+  // ANS-110 Required tags
   tx.addTag('Content-Type', 'text/markdown');
-  tx.addTag('App-Name', 'Specs-Portal');
-  tx.addTag('Spec-Type', 'spec');
-  tx.addTag('Spec-Version', '1.0.0');
-  tx.addTag('Timestamp', Date.now().toString());
+  tx.addTag('Type', 'spec');
+  tx.addTag('Title', metadata.title);
   
-  // Metadata tags
-  if (metadata.title) tx.addTag('Spec-Title', metadata.title);
-  if (metadata.group) tx.addTag('Spec-Group', metadata.group);
-  if (metadata.variant) tx.addTag('Spec-Variant', metadata.variant);
-  if (metadata.description) tx.addTag('Spec-Description', metadata.description);
-  if (metadata.topics?.length) tx.addTag('Spec-Topics', metadata.topics.join(','));
-  if (metadata.authors?.length) tx.addTag('Spec-Authors', metadata.authors.join(','));
-  if (metadata.fork) tx.addTag('Spec-Fork', metadata.fork);
+  // ANS-110 Optional tags
+  if (metadata.description) tx.addTag('Description', metadata.description);
+  if (metadata.topics?.length) tx.addTag('Topics', metadata.topics.join(','));
+  
+  // Additional metadata
+  tx.addTag('App-Name', 'Specs-Portal'); // App identity
+  tx.addTag('App-Version', '2.0.0');
+  if (metadata.variant) tx.addTag('Variant', metadata.variant);
+  if (metadata.group) tx.addTag('GroupId', metadata.group);
+  if (metadata.authors?.length) tx.addTag('Authors', metadata.authors.join(','));
+  if (metadata.fork) tx.addTag('Forks', metadata.fork);
+  tx.addTag('Timestamp', Date.now().toString());
   
   // Sign and post
   await arweave.transactions.sign(tx);
@@ -124,7 +128,7 @@ export async function createSpec(content, metadata) {
 }
 
 /**
- * Create a stamp transaction
+ * Create a stamp transaction (ANS-110 compliant)
  */
 export async function stampSpec(specId) {
   if (!address) throw new Error('Wallet not connected');
@@ -138,8 +142,9 @@ export async function stampSpec(specId) {
   
   tx.addTag('Content-Type', 'application/json');
   tx.addTag('App-Name', 'Specs-Portal');
-  tx.addTag('Spec-Type', 'stamp');
-  tx.addTag('Spec-Ref', specId);
+  tx.addTag('App-Version', '2.0.0');
+  tx.addTag('Type', 'stamp');
+  tx.addTag('Ref', specId);
   tx.addTag('Timestamp', Date.now().toString());
   
   await arweave.transactions.sign(tx);
