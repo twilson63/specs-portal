@@ -27,9 +27,9 @@ jobs:
           JWK: ${{ secrets.ARWEAVE_JWK }}
         run: |
           echo "$JWK" > wallet.json
-          # Create clean deploy folder (exclude node_modules, tests, etc.)
           mkdir -p dist
           cp index.html dist/
           cp -r js dist/
-          # Use Turbo for free bundling
-          npx arweave-deploy ./dist --wallet wallet.json --index-file index.html --no-confirmation 2>&1 || echo "Trying fallback..."
+          RESULT=$(npx arweave-deploy ./dist --wallet wallet.json --index-file index.html --no-confirmation 2>&1)
+          echo "$RESULT"
+          echo "ARWEAVE_URL=$RESULT" >> $GITHUB_ENV
