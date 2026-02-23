@@ -27,4 +27,8 @@ jobs:
           JWK: ${{ secrets.ARWEAVE_JWK }}
         run: |
           echo "$JWK" > wallet.json
-          arweave-deploy ./ --wallet wallet.json --index-file index.html --no-confirmation
+          # Create clean deploy folder (exclude node_modules, tests, etc.)
+          mkdir -p dist
+          cp index.html dist/
+          cp -r js dist/
+          arweave-deploy ./dist --wallet wallet.json --index-file index.html --no-confirmation
