@@ -30,6 +30,4 @@ jobs:
           mkdir -p dist
           cp index.html dist/
           cp -r js dist/
-          RESULT=$(npx arweave-deploy ./dist --wallet wallet.json --index-file index.html --no-confirmation 2>&1)
-          echo "$RESULT"
-          echo "ARWEAVE_URL=$RESULT" >> $GITHUB_ENV
+          npx arweave-deploy ./dist --wallet wallet.json --index-file index.html --no-confirmation
