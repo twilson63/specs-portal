@@ -1,0 +1,30 @@
+# IMPORTANT: Add ARWEAVE_JWK secret to your GitHub repository
+# Go to: Repository Settings → Secrets and variables → Actions
+# Add a new secret named ARWEAVE_JWK with your Arweave wallet JWK content
+
+name: Deploy to Arweave
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - name: Install arweave-deploy
+        run: npm install -g arweave-deploy # or use npx
+      
+      - name: Deploy to Arweave
+        env:
+          JWK: ${{ secrets.ARWEAVE_JWK }}
+        run: |
+          echo "$JWK" > wallet.json
+          arweave-deploy ./ --wallet wallet.json --index-file index.html --no-confirmation
