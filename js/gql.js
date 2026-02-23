@@ -256,9 +256,25 @@ export async function getSpecsWithStamps(first = 20, after = null) {
       stampCounts[refTag.value]++;
     }
   }
-  
+
+  // Deduplicate specs (keep most recent version per GroupId/Title)
+  const dedupedEdges = deduplicateSpecs(data.specs.edges);
+
+  // Sort by stamp count (highest first)
+  dedupedEdges.sort((a, b) => {
+    const countA = stampCounts[a.node.id] || 0;
+    const countB = stampCounts[b.node.id] || 0;
+    return countB - countA;
+  });
+
+  // Create new specs object with deduplicated and sorted edges
+  const sortedSpecs = {
+    ...data.specs,
+    edges: dedupedEdges
+  };
+
   return { 
-    specs: data.specs, 
+    specs: sortedSpecs, 
     stampCounts 
   };
 }
@@ -364,10 +380,17 @@ export function deduplicateSpecs(edges) {
     const groupId = tags.GroupId;
     const title = tags.Title || '';
     
-    // Use GroupId as primary key, fallback to Title prefix
-    const key = groupId || (title.length > 0 ? title.split(':')[0].trim() : edge.node.id);
-    const height = edge.node.block?.height || 0;
+    // Use GroupId as primary key, fallback to full Title, then ID
+    let key = groupId;
+    if (!key && title.length > 0) {
+      // Normalize title: lowercase, trim, remove extra spaces
+      key = title.toLowerCase().trim().replace(/\s+/g, ' ');
+    }
+    if (!key) {
+      key = edge.node.id;
+    }
     
+    const height = edge.node.block?.height || 0;
     const existing = seen.get(key);
     
     if (!existing) {
@@ -401,3 +424,18 @@ function parseTags(tags) {
   }
   return result;
 }
+// ============================================================
+// RESEARCH: Single GraphQL Query for Specs + Stamps
+// ============================================================
+//
+// Arweave GraphQL does NOT support JOIN-like queries.
+// You cannot get specs and their stamp counts in one query.
+//
+// The approach must be:
+// 1. Query specs: transactions(tags: [{name: "Type", values: ["spec"]}])
+// 2. Query stamps: transactions(tags: [{name: "Type", values: ["stamp"]}])
+// 3. Join client-side (our current approach with getStampCounts)
+//
+// Tested: Arweave GraphQL (arweave.net/graphql)
+// Result: No postEdges, no nested queries, no computed fields.
+// ============================================================

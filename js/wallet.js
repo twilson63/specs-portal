@@ -18,6 +18,7 @@ let wallet = null;
 
 /**
  * Check if wallet is connected
+ * @returns {boolean} True if wallet is connected
  */
 export function isConnected() {
   return address !== null;
@@ -25,6 +26,7 @@ export function isConnected() {
 
 /**
  * Get connected wallet address
+ * @returns {string|null} The wallet address or null if not connected
  */
 export function getAddress() {
   return address;
@@ -32,6 +34,7 @@ export function getAddress() {
 
 /**
  * Get shortened address display
+ * @returns {string|null} Shortened address (e.g., "abc123...xyz1") or null if not connected
  */
 export function getShortAddress() {
   if (!address) return null;
@@ -40,6 +43,8 @@ export function getShortAddress() {
 
 /**
  * Connect to Arweave wallet (Wander)
+ * @returns {Promise<string>} The connected wallet address
+ * @throws {Error} If Wander wallet extension is not installed
  */
 export async function connect() {
   if (!window.arweaveWallet) {
@@ -67,6 +72,7 @@ export async function connect() {
 
 /**
  * Disconnect wallet
+ * @returns {Promise<void>}
  */
 export async function disconnect() {
   if (window.arweaveWallet) {
@@ -82,6 +88,7 @@ export async function disconnect() {
 
 /**
  * Handle wallet switch event
+ * @param {CustomEvent} event - Wallet switch event containing new address
  */
 function handleWalletSwitch(event) {
   address = event.detail.address;
@@ -92,6 +99,17 @@ function handleWalletSwitch(event) {
  * Create and post a new spec transaction
  * Uses ANS-110 for spec discoverability
  * https://cookbook.arweave.net/references/specs/ans/ANS-110.html
+ * @param {string} content - The spec content in markdown format
+ * @param {Object} metadata - Spec metadata
+ * @param {string} metadata.title - Spec title (required, ANS-110)
+ * @param {string} [metadata.description] - Spec description (ANS-110)
+ * @param {string[]} [metadata.topics] - Array of topics (ANS-110)
+ * @param {string} [metadata.variant] - Version variant (e.g., "1.0.0")
+ * @param {string} [metadata.group] - Group identifier
+ * @param {string[]} [metadata.authors] - Array of author addresses
+ * @param {string} [metadata.fork] - Transaction ID being forked
+ * @returns {Promise<string>} The transaction ID of the published spec
+ * @throws {Error} If wallet is not connected
  */
 export async function createSpec(content, metadata) {
   if (!address) throw new Error('Wallet not connected');
@@ -116,6 +134,18 @@ export async function createSpec(content, metadata) {
   if (metadata.fork) tx.addTag('Forks', metadata.fork);
   tx.addTag('Timestamp', Date.now().toString());
   
+  // Use dispatch() for bundled ANS-104 transactions (faster, cheaper)
+  // Falls back to regular post if dispatch not available
+  if (window.arweaveWallet) {
+    try {
+      const result = await window.arweaveWallet.dispatch(tx);
+      console.log(`Spec dispatched as ${result.type}: ${result.id}`);
+      return result.id;
+    } catch (err) {
+      console.warn('Dispatch failed, falling back to regular post:', err);
+    }
+  }
+  
   // Sign and post
   await arweave.transactions.sign(tx);
   const response = await arweave.transactions.post(tx);
@@ -129,6 +159,9 @@ export async function createSpec(content, metadata) {
 
 /**
  * Create a stamp transaction (ANS-110 compliant)
+ * @param {string} specId - The transaction ID of the spec to stamp
+ * @returns {Promise<string>} The transaction ID of the stamp
+ * @throws {Error} If wallet is not connected
  */
 export async function stampSpec(specId) {
   if (!address) throw new Error('Wallet not connected');
@@ -147,6 +180,18 @@ export async function stampSpec(specId) {
   tx.addTag('Ref', specId);
   tx.addTag('Timestamp', Date.now().toString());
   
+  // Use dispatch() for bundled ANS-104 transactions (faster, cheaper)
+  // Falls back to regular post if dispatch not available
+  if (window.arweaveWallet) {
+    try {
+      const result = await window.arweaveWallet.dispatch(tx);
+      console.log(`Stamp dispatched as ${result.type}: ${result.id}`);
+      return result.id;
+    } catch (err) {
+      console.warn('Dispatch failed, falling back to regular post:', err);
+    }
+  }
+  
   await arweave.transactions.sign(tx);
   const response = await arweave.transactions.post(tx);
   
@@ -159,6 +204,7 @@ export async function stampSpec(specId) {
 
 /**
  * Get wallet balance
+ * @returns {Promise<string>} Balance in AR
  */
 export async function getBalance() {
   if (!address) return '0';

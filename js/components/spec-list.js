@@ -1,11 +1,15 @@
 /**
  * Spec List Component
  */
-import { getSpecs, getStampCounts, deduplicateSpecs } from '../gql.js';
+import { getSpecsWithStamps, deduplicateSpecs } from '../gql.js';
 import { parseTags, formatTimestamp, shortHash } from '../utils.js';
+import { isPendingStamp } from '../pending-stamps.js';
 
 /**
  * Render spec list page
+ * @param {HTMLElement} container - Container element to render into
+ * @param {Function} [onLoadMore] - Callback for load more button
+ * @returns {Promise<void>}
  */
 export async function renderSpecList(container, onLoadMore) {
   container.innerHTML = `
@@ -17,13 +21,18 @@ export async function renderSpecList(container, onLoadMore) {
   `;
   
   try {
-    const result = await getSpecs(50); // Fetch more to deduplicate
-    const specs = deduplicateSpecs(result.edges); // Deduplicate by GroupId/Title
-    const hasNextPage = false; // Disable pagination when deduplicating (handled client-side)
+    // Single GraphQL call to get specs AND stamp counts (already deduplicated and sorted)
+    const { specs: result, stampCounts } = await getSpecsWithStamps(50);
+    const specs = result.edges; // Already deduplicated and sorted by stamp count in gql.js
+    const hasNextPage = false;
     
-    // Batch fetch stamp counts for all specs
-    const specIds = specs.map(edge => edge.node.id);
-    const stampCounts = await getStampCounts(specIds);
+    // Add pending stamps to counts
+    for (const spec of specs) {
+      const specId = spec.node.id;
+      if (isPendingStamp(specId)) {
+        stampCounts[specId] = (stampCounts[specId] || 0) + 1;
+      }
+    }
     
     renderSpecs(container, specs, stampCounts, hasNextPage, onLoadMore);
     
@@ -44,6 +53,11 @@ export async function renderSpecList(container, onLoadMore) {
 
 /**
  * Render the list of spec cards
+ * @param {HTMLElement} container - Container element to render into
+ * @param {Array} specs - Array of spec edges from GraphQL
+ * @param {Object} stampCounts - Map of specId to stamp count
+ * @param {boolean} hasNextPage - Whether more specs are available
+ * @param {Function} [onLoadMore] - Callback for load more button
  */
 function renderSpecs(container, specs, stampCounts, hasNextPage, onLoadMore) {
   if (specs.length === 0) {
@@ -82,12 +96,16 @@ function renderSpecs(container, specs, stampCounts, hasNextPage, onLoadMore) {
 
 /**
  * Render individual spec card (ANS-110 compliant)
+ * @param {Object} node - Transaction node from GraphQL
+ * @param {Object} [stampCounts={}] - Map of specId to stamp count
+ * @returns {string} HTML string for the spec card
  */
 function renderSpecCard(node, stampCounts = {}) {
   const tags = parseTags(node.tags);
   const date = formatTimestamp(node.block?.timestamp || tags.Timestamp);
   const height = node.block?.height || 'Pending';
   const stamps = stampCounts[node.id] || 0;
+  const pending = isPendingStamp(node.id);
   
   return `
     <div class="spec-card pt-4 border-b-2 border-slate-200 hover:bg-gray-50 cursor-pointer" data-id="${node.id}">
@@ -97,6 +115,7 @@ function renderSpecCard(node, stampCounts = {}) {
             <h1 class="pl-2 md:pl-8 text-xl text-primary">
               ${escapeHtml(tags.Title || 'Untitled')}
               ${tags.GroupId ? `<span class="text-gray-500 text-base ml-2">(${escapeHtml(tags.GroupId)})</span>` : ''}
+              ${pending ? `<span class="badge badge-sm badge-warning ml-2">pending</span>` : ''}
             </h1>
           </div>
           <div>
@@ -133,6 +152,8 @@ function renderSpecCard(node, stampCounts = {}) {
 
 /**
  * Escape HTML to prevent XSS
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped HTML-safe text
  */
 function escapeHtml(text) {
   if (!text) return '';
@@ -144,6 +165,9 @@ function escapeHtml(text) {
 /**
  * Append more specs (for pagination)
  * Note: pagination is handled via client-side deduplication with more results
+ * @param {HTMLElement} container - Container element
+ * @param {string} cursor - Pagination cursor
+ * @param {Function} onDone - Callback when done
  */
 export async function appendSpecs(container, cursor, onDone) {
   // Pagination disabled - all deduplication happens client-side
