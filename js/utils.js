@@ -5,6 +5,8 @@
 /**
  * Parse Arweave tags array into object
  * Handles ANS-110 tag format
+ * @param {Array<{name: string, value: string}>} tags - Array of tag objects from GraphQL
+ * @returns {Object} Parsed tags as key-value pairs
  */
 export function parseTags(tags) {
   const result = {};
@@ -38,6 +40,15 @@ export function parseTags(tags) {
 /**
  * Create tags array from metadata object
  * Uses ANS-110 format
+ * @param {Object} metadata - Metadata object
+ * @param {string} [metadata.title] - Spec title (ANS-110 required)
+ * @param {string} [metadata.description] - Spec description (ANS-110 optional)
+ * @param {string[]} [metadata.topics] - Array of topics
+ * @param {string} [metadata.variant] - Version variant
+ * @param {string} [metadata.group] - Group identifier
+ * @param {string[]} [metadata.authors] - Array of author addresses
+ * @param {string} [metadata.fork] - Forked transaction ID
+ * @returns {Array<{name: string, value: string}>} Array of tags in ANS-110 format
  */
 export function createTags(metadata) {
   const tags = [
@@ -66,6 +77,10 @@ export function createTags(metadata) {
 
 /**
  * Shorten a hash for display
+ * @param {string} hash - The hash to shorten
+ * @param {number} [start=5] - Number of characters to show at start
+ * @param {number} [end=5] - Number of characters to show at end
+ * @returns {string} Shortened hash or empty string if invalid
  */
 export function shortHash(hash, start = 5, end = 5) {
   if (!hash) return '';
@@ -75,6 +90,8 @@ export function shortHash(hash, start = 5, end = 5) {
 
 /**
  * Format timestamp for display
+ * @param {number|string} timestamp - Unix timestamp (seconds) or milliseconds
+ * @returns {string} Formatted date string (e.g., "1/15/2024") or "Pending"
  */
 export function formatTimestamp(timestamp) {
   if (!timestamp || timestamp === 'Pending') return 'Pending';
@@ -97,6 +114,9 @@ export function formatTimestamp(timestamp) {
 
 /**
  * Simple hash-based router
+ * @param {Object} routes - Object mapping hash paths to handler functions
+ * @returns {Object} Router instance with navigate method
+ * @property {Function} navigate - Navigate to a path
  */
 export function createRouter(routes) {
   function handleRoute() {
@@ -121,6 +141,8 @@ export function createRouter(routes) {
 
 /**
  * Escape HTML to prevent XSS
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped HTML-safe text
  */
 export function escapeHtml(text) {
   const div = document.createElement('div');
@@ -129,18 +151,44 @@ export function escapeHtml(text) {
 }
 
 /**
+ * Strip YAML front matter from markdown content
+ * @param {string} content - Markdown content with optional front matter
+ * @returns {string} Content without front matter
+ */
+export function stripFrontMatter(content) {
+  if (!content) return '';
+  // Check if content starts with ---
+  if (content.trim().startsWith('---')) {
+    // Find the closing ---
+    const endIndex = content.indexOf('---', 3);
+    if (endIndex !== -1) {
+      return content.slice(endIndex + 3).trim();
+    }
+  }
+  return content;
+}
+
+/**
  * Render markdown to HTML
+ * @param {string} content - Markdown content
+ * @returns {string} HTML string
  */
 export function renderMarkdown(content) {
+  // Strip front matter before rendering
+  const cleanContent = stripFrontMatter(content);
+  
   if (window.marked) {
-    return window.marked.parse(content);
+    return window.marked.parse(cleanContent);
   }
   // Fallback: escape and wrap in pre
-  return `<pre>${escapeHtml(content)}</pre>`;
+  return `<pre>${escapeHtml(cleanContent)}</pre>`;
 }
 
 /**
  * Debounce function
+ * @param {Function} fn - Function to debounce
+ * @param {number} delay - Delay in milliseconds
+ * @returns {Function} Debounced function
  */
 export function debounce(fn, delay) {
   let timeoutId;
@@ -152,6 +200,8 @@ export function debounce(fn, delay) {
 
 /**
  * Show toast notification
+ * @param {string} message - Message to display
+ * @param {string} [type='info'] - Alert type ('info', 'success', 'warning', 'error')
  */
 export function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container') || createToastContainer();
