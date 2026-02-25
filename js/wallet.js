@@ -98,6 +98,10 @@ export async function disconnect() {
  */
 function handleWalletSwitch(event) {
   address = event.detail.address;
+  // Clear old wallet's stamps when switching
+  if (typeof clearUserStamps === 'function') {
+    clearUserStamps();
+  }
   window.dispatchEvent(new CustomEvent('walletChanged', { detail: { address } }));
 }
 
