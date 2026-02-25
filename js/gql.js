@@ -51,21 +51,36 @@ const STAMP_DATA_SOURCE = 'SYHBhGAmBo6fgAkINNoRtumOzxNB8-JFv2tPhBuNk5c';
 const STAMP_PROTOCOL_NAME = 'Stamp';
 const STAMP_ACTION = 'Write-Stamp';
 
-// Try primary (relative to current host), fallback to Goldsky
-const PRIMARY_GQL = '/graphql';
-const FALLBACK_GQL = 'https://arweave-search.goldsky.com/graphql';
+// Use Goldsky as primary (reliable), can override via window
+const PRIMARY_GQL = window.HYPERBEAM_URL || 'https://arweave-search.goldsky.com/graphql';
+const FALLBACK_GQL = 'https://arweave.net/graphql';
 
 /**
- * Execute GraphQL query with fallback: tries primary first, then Goldsky
+ * Execute GraphQL query with timeout and fallback
  */
 async function gqlWithFallback(query, variables) {
+  // Helper to fetch with timeout
+  const fetchWithTimeout = async (url, options, timeout = 10000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return response;
+    } catch (e) {
+      clearTimeout(id);
+      throw e;
+    }
+  };
+
   // Try primary first
   try {
-    const result = await fetch(PRIMARY_GQL, {
+    const result = await fetchWithTimeout(PRIMARY_GQL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, variables })
-    });
+    }, 8000);
+    
     if (result.ok) {
       const data = await result.json();
       if (!data.errors) return data;
@@ -74,13 +89,19 @@ async function gqlWithFallback(query, variables) {
     console.warn('Primary GraphQL failed, trying fallback:', e.message);
   }
   
-  // Fallback to Goldsky
-  const fallbackResult = await fetch(FALLBACK_GQL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables })
-  });
-  return await fallbackResult.json();
+  // Fallback to arweave.net
+  try {
+    const fallbackResult = await fetchWithTimeout(FALLBACK_GQL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables })
+    }, 15000);
+    
+    return await fallbackResult.json();
+  } catch (e) {
+    console.error('All GraphQL endpoints failed');
+    throw e;
+  }
 }
 
 /**
