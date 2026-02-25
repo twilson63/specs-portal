@@ -3,7 +3,7 @@
  */
 import { getSpecsWithStamps, deduplicateSpecs } from '../gql.js';
 import { parseTags, formatTimestamp, shortHash } from '../utils.js';
-import { isPendingStamp } from '../pending-stamps.js';
+import { isPendingStamp, hasUserStamped as hasUserStampedLocal } from '../pending-stamps.js';
 
 /**
  * Render spec list page

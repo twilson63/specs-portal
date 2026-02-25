@@ -4,7 +4,7 @@
 import { getSpec, getSpecContent, getStampCount, hasUserStamped } from '../gql.js';
 import { stampSpec, isConnected, getAddress, connect } from '../wallet.js';
 import { parseTags, formatTimestamp, shortHash, renderMarkdown, escapeHtml } from '../utils.js';
-import { addPendingStamp, removePendingStamp, isPendingStamp } from '../pending-stamps.js';
+import { addPendingStamp, removePendingStamp, isPendingStamp, addUserStamp, hasUserStamped as hasUserStampedLocal } from '../pending-stamps.js';
 
 /**
  * Render spec view page
@@ -32,7 +32,10 @@ export async function renderSpecView(container, specId, state) {
     
     const tags = parseTags(spec.tags);
     const userAddress = getAddress();
-    const userHasStamped = userAddress ? await hasUserStamped(specId, userAddress) : false;
+    // Check both on-chain and localStorage for existing stamps
+    const userHasStampedOnChain = userAddress ? await hasUserStamped(specId, userAddress) : false;
+    const userHasStampedLocal = hasUserStampedLocal(specId);
+    const userHasStamped = userHasStampedOnChain || userHasStampedLocal;
     
     // Update sidebar state
     updateState({ current: 'view', tx: specId });
@@ -172,6 +175,7 @@ function renderSpec(container, data) {
       
       await stampSpec(id);
       addPendingStamp(id);
+      addUserStamp(id); // Track locally to prevent duplicate stamping
       
       stampBtn.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">

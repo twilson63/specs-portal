@@ -84,6 +84,12 @@ export async function disconnect() {
   }
   address = null;
   window.removeEventListener('walletSwitch', handleWalletSwitch);
+  
+  // Clear user stamps when wallet disconnects
+  // This prevents stale data from a previous wallet
+  if (typeof clearUserStamps === 'function') {
+    clearUserStamps();
+  }
 }
 
 /**
@@ -158,7 +164,9 @@ export async function createSpec(content, metadata) {
 }
 
 /**
- * Create a stamp transaction (ANS-110 compliant)
+ * Create a stamp transaction using the new Stamp Protocol
+ * Uses Data-Source, Protocol-Name, and Action tags
+ * Prevents same wallet from stamping same resource more than once
  * @param {string} specId - The transaction ID of the spec to stamp
  * @returns {Promise<string>} The transaction ID of the stamp
  * @throws {Error} If wallet is not connected
@@ -173,10 +181,11 @@ export async function stampSpec(specId) {
   
   const tx = await arweave.createTransaction({ data });
   
+  // New Stamp Protocol tags
   tx.addTag('Content-Type', 'application/json');
-  tx.addTag('App-Name', 'Specs-Portal');
-  tx.addTag('App-Version', '2.0.0');
-  tx.addTag('Type', 'stamp');
+  tx.addTag('Data-Source', 'SYHBhGAmBo6fgAkINNoRtumOzxNB8-JFv2tPhBuNk5c');
+  tx.addTag('Protocol-Name', 'Stamp');
+  tx.addTag('Action', 'Write-Stamp');
   tx.addTag('Ref', specId);
   tx.addTag('Timestamp', Date.now().toString());
   
