@@ -43,21 +43,52 @@
  */
 
 // Configuration - can be overridden via window.HYPERBEAM_URL
-const HYPERBEAM_URL = window.HYPERBEAM_URL || 'https://arweave.net/graphql';
+const HYPERBEAM_URL = window.HYPERBEAM_URL || 'https://arweave-search.goldsky.com/graphql';
 const GATEWAY_URL = window.GATEWAY_URL || 'https://arweave.net';
 
+// New Stamp Protocol constants
+const STAMP_DATA_SOURCE = 'SYHBhGAmBo6fgAkINNoRtumOzxNB8-JFv2tPhBuNk5c';
+const STAMP_PROTOCOL_NAME = 'Stamp';
+const STAMP_ACTION = 'Write-Stamp';
+
+// Try primary (relative to current host), fallback to Goldsky
+const PRIMARY_GQL = '/graphql';
+const FALLBACK_GQL = 'https://arweave-search.goldsky.com/graphql';
+
 /**
- * Execute a GraphQL query against HyperBEAM
+ * Execute GraphQL query with fallback: tries primary first, then Goldsky
+ */
+async function gqlWithFallback(query, variables) {
+  // Try primary first
+  try {
+    const result = await fetch(PRIMARY_GQL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables })
+    });
+    if (result.ok) {
+      const data = await result.json();
+      if (!data.errors) return data;
+    }
+  } catch (e) {
+    console.warn('Primary GraphQL failed, trying fallback:', e.message);
+  }
+  
+  // Fallback to Goldsky
+  const fallbackResult = await fetch(FALLBACK_GQL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables })
+  });
+  return await fallbackResult.json();
+}
+
+/**
+ * Execute a GraphQL query against HyperBEAM (with fallback)
  */
 export async function query(gql, variables = {}) {
   try {
-    const res = await fetch(HYPERBEAM_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: gql, variables })
-    });
-    
-    const json = await res.json();
+    const json = await gqlWithFallback(gql, variables);
     
     if (json.errors) {
       console.error('GraphQL Error:', json.errors);
@@ -130,7 +161,8 @@ export async function getSpecContent(id) {
 }
 
 /**
- * Get stamp count for a spec (ANS-110 compliant)
+ * Get stamp count for a spec using the new Stamp Protocol
+ * Uses Data-Source, Protocol-Name, and Action tags
  */
 export async function getStampCount(specId) {
   const data = await query(`
@@ -138,20 +170,31 @@ export async function getStampCount(specId) {
       transactions(
         first: 1000
         tags: [
-          { name: "Type", values: ["stamp"] }
-          { name: "Ref", values: [$specId] }
+          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
+          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
+          { name: "Action", values: ["Write-Stamp"] }
         ]
       ) {
-        edges { node { id } }
+        edges { node { tags { name value } } }
       }
     }
   `, { specId });
   
-  return data.transactions.edges.length;
+  // Count stamps for the specific specId
+  let count = 0;
+  for (const edge of data.transactions.edges) {
+    const tags = edge.node.tags;
+    const refTag = tags.find(t => t.name === 'Ref');
+    if (refTag && refTag.value === specId) {
+      count++;
+    }
+  }
+  return count;
 }
 
 /**
  * Get stamp counts for multiple specs in one query
+ * Uses the new Stamp Protocol
  * @param {Array} specIds - Array of spec transaction IDs
  * @returns {Object} - Map of specId -> stamp count
  */
@@ -159,12 +202,13 @@ export async function getStampCounts(specIds) {
   if (!specIds || specIds.length === 0) return {};
   
   const data = await query(`
-    query GetStampCounts($refIds: [String!]) {
+    query GetStampCounts {
       transactions(
         first: 10000
         tags: [
-          { name: "Type", values: ["stamp"] }
-          { name: "Ref", values: $refIds }
+          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
+          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
+          { name: "Action", values: ["Write-Stamp"] }
         ]
       ) {
         edges {
@@ -174,7 +218,7 @@ export async function getStampCounts(specIds) {
         }
       }
     }
-  `, { refIds: specIds });
+  `);
   
   // Count stamps per Ref
   const counts = {};
@@ -226,7 +270,9 @@ export async function getSpecsWithStamps(first = 20, after = null) {
       stamps: transactions(
         first: 10000
         tags: [
-          { name: "Type", values: ["stamp"] }
+          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
+          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
+          { name: "Action", values: ["Write-Stamp"] }
         ]
       ) {
         edges {
@@ -280,7 +326,8 @@ export async function getSpecsWithStamps(first = 20, after = null) {
 }
 
 /**
- * Check if user has stamped a spec (ANS-110 compliant)
+ * Check if user has stamped a spec using the new Stamp Protocol
+ * Prevents same wallet address from stamping the same resource more than once
  */
 export async function hasUserStamped(specId, userAddress) {
   if (!userAddress) return false;
@@ -288,19 +335,28 @@ export async function hasUserStamped(specId, userAddress) {
   const data = await query(`
     query UserStamps($specId: String!, $owner: String!) {
       transactions(
-        first: 1
+        first: 100
         owners: [$owner]
         tags: [
-          { name: "Type", values: ["stamp"] }
-          { name: "Ref", values: [$specId] }
+          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
+          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
+          { name: "Action", values: ["Write-Stamp"] }
         ]
       ) {
-        edges { node { id } }
+        edges { node { tags { name value } } }
       }
     }
   `, { specId, owner: userAddress });
   
-  return data.transactions.edges.length > 0;
+  // Check if any stamp matches the specId
+  for (const edge of data.transactions.edges) {
+    const tags = edge.node.tags;
+    const refTag = tags.find(t => t.name === 'Ref');
+    if (refTag && refTag.value === specId) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
