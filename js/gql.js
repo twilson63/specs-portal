@@ -26,7 +26,7 @@
  *   specs: transactions(first: 20, tags: [{name: "Type", values: ["spec"]}]) {
  *     edges { cursor node { id tags { name value } block { timestamp height } owner { address } } } }
  *   }
- *   stamps: transactions(first: 10000, tags: [{name: "Type", values: ["stamp"]}, {name: "Ref", values: $specIds}]) {
+ *   stamps: transactions(first: 10000, tags: [{name: "Protocol-Name", values: ["Stamp", "stamp"]}, {name: "Data-Source", values: $specIds}]) {
  *     edges { node { tags { name value } } }
  *   }
  * }
@@ -46,10 +46,8 @@
 const HYPERBEAM_URL = window.HYPERBEAM_URL || 'https://arweave-search.goldsky.com/graphql';
 const GATEWAY_URL = window.GATEWAY_URL || 'https://arweave.net';
 
-// New Stamp Protocol constants
-const STAMP_DATA_SOURCE = 'SYHBhGAmBo6fgAkINNoRtumOzxNB8-JFv2tPhBuNk5c';
+// Stamp protocol constants
 const STAMP_PROTOCOL_NAME = 'Stamp';
-const STAMP_ACTION = 'Write-Stamp';
 
 // Use Goldsky as primary (reliable), can override via window
 const PRIMARY_GQL = window.HYPERBEAM_URL || 'https://arweave-search.goldsky.com/graphql';
@@ -182,8 +180,8 @@ export async function getSpecContent(id) {
 }
 
 /**
- * Get stamp count for a spec using the new Stamp Protocol
- * Uses Data-Source, Protocol-Name, and Action tags
+ * Get stamp count for a spec using stamp protocol tags
+ * Data-Source is the spec transaction ID
  */
 export async function getStampCount(specId) {
   const data = await query(`
@@ -191,26 +189,16 @@ export async function getStampCount(specId) {
       transactions(
         first: 1000
         tags: [
-          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
-          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
-          { name: "Action", values: ["Write-Stamp"] }
+          { name: "Data-Source", values: [$specId] }
+          { name: "Protocol-Name", values: ["${STAMP_PROTOCOL_NAME}", "stamp"] }
         ]
       ) {
-        edges { node { tags { name value } } }
+        edges { node { id } }
       }
     }
   `, { specId });
-  
-  // Count stamps for the specific specId
-  let count = 0;
-  for (const edge of data.transactions.edges) {
-    const tags = edge.node.tags;
-    const refTag = tags.find(t => t.name === 'Ref');
-    if (refTag && refTag.value === specId) {
-      count++;
-    }
-  }
-  return count;
+
+  return data.transactions.edges.length;
 }
 
 /**
@@ -221,111 +209,36 @@ export async function getStampCount(specId) {
  */
 export async function getStampCounts(specIds) {
   if (!specIds || specIds.length === 0) return {};
-  
-  const data = await query(`
-    query GetStampCounts {
-      transactions(
-        first: 10000
-        tags: [
-          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
-          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
-          { name: "Action", values: ["Write-Stamp"] }
-        ]
-      ) {
-        edges {
-          node {
-            tags { name value }
-          }
-        }
-      }
-    }
-  `);
-  
-  // Count stamps per Ref
-  const counts = {};
-  for (const specId of specIds) {
-    counts[specId] = 0;
-  }
-  
-  for (const edge of data.transactions.edges) {
-    const tags = edge.node.tags;
-    const refTag = tags.find(t => t.name === 'Ref');
-    if (refTag && counts.hasOwnProperty(refTag.value)) {
-      counts[refTag.value]++;
-    }
-  }
-  
-  return counts;
+
+  // Query each spec directly to avoid indexer caps on wide multi-value tag filters.
+  // This keeps list counts consistent with getStampCount(specId) used in detail view.
+  const entries = await Promise.all(
+    specIds.map(async (specId) => {
+      const count = await getStampCount(specId);
+      return [specId, count];
+    })
+  );
+
+  return Object.fromEntries(entries);
 }
 
 /**
- * Get specs WITH their stamp counts in a SINGLE GraphQL query
- * Uses GraphQL aliases to batch both queries together
- * This is more efficient than calling getSpecs() + getStampCounts() separately
+ * Get specs with their stamp counts
+ * Uses targeted queries for reliable per-spec counting
  * 
  * @param {number} first - Number of specs to fetch
  * @param {string|null} after - Cursor for pagination
  * @returns {Object} - { specs: TransactionConnection, stampCounts: Object<specId, count> }
  */
 export async function getSpecsWithStamps(first = 20, after = null) {
-  // Single GraphQL query using aliases - fetches specs AND stamps in ONE call
-  const data = await query(`
-    query GetSpecsWithStamps($first: Int, $after: String) {
-      specs: transactions(
-        first: $first
-        after: $after
-        tags: [{ name: "Type", values: ["spec"] }]
-        sort: INGESTED_AT_DESC
-      ) {
-        pageInfo { hasNextPage }
-        edges {
-          cursor
-          node {
-            id
-            tags { name value }
-            block { timestamp height }
-            owner { address }
-          }
-        }
-      }
-      stamps: transactions(
-        first: 10000
-        tags: [
-          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
-          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
-          { name: "Action", values: ["Write-Stamp"] }
-        ]
-      ) {
-        edges {
-          node {
-            tags { name value }
-          }
-        }
-      }
-    }
-  `, { first, after });
-  
-  // Extract spec IDs from the returned specs
-  const specIds = data.specs.edges.map(e => e.node.id);
-  
-  // Initialize counts for all spec IDs
-  const stampCounts = {};
-  for (const specId of specIds) {
-    stampCounts[specId] = 0;
-  }
-  
-  // Count stamps - filter client-side to only counts matching our specs
-  // This is more efficient than N+1 queries, even if we fetch all stamps
-  for (const edge of data.stamps.edges) {
-    const tags = edge.node.tags;
-    const refTag = tags.find(t => t.name === 'Ref');
-    if (refTag && stampCounts.hasOwnProperty(refTag.value)) {
-      stampCounts[refTag.value]++;
-    }
-  }
+  // Two targeted queries are more reliable here than one wide stamp query,
+  // because indexers may cap `first` and return only a recent stamp window.
+  const specs = await getSpecs(first, after);
+  const specIds = specs.edges.map(e => e.node.id);
+  const stampCounts = await getStampCounts(specIds);
 
   // Deduplicate specs (keep most recent version per GroupId/Title)
-  const dedupedEdges = deduplicateSpecs(data.specs.edges);
+  const dedupedEdges = deduplicateSpecs(specs.edges);
 
   // Sort by stamp count (highest first)
   dedupedEdges.sort((a, b) => {
@@ -335,10 +248,7 @@ export async function getSpecsWithStamps(first = 20, after = null) {
   });
 
   // Create new specs object with deduplicated and sorted edges
-  const sortedSpecs = {
-    ...data.specs,
-    edges: dedupedEdges
-  };
+  const sortedSpecs = { ...specs, edges: dedupedEdges };
 
   return { 
     specs: sortedSpecs, 
@@ -359,25 +269,16 @@ export async function hasUserStamped(specId, userAddress) {
         first: 100
         owners: [$owner]
         tags: [
-          { name: "Data-Source", values: ["${STAMP_DATA_SOURCE}"] }
-          { name: "Protocol-Name", values: ["Stamp", "stamp"] }
-          { name: "Action", values: ["Write-Stamp"] }
+          { name: "Data-Source", values: [$specId] }
+          { name: "Protocol-Name", values: ["${STAMP_PROTOCOL_NAME}", "stamp"] }
         ]
       ) {
-        edges { node { tags { name value } } }
+        edges { node { id } }
       }
     }
   `, { specId, owner: userAddress });
-  
-  // Check if any stamp matches the specId
-  for (const edge of data.transactions.edges) {
-    const tags = edge.node.tags;
-    const refTag = tags.find(t => t.name === 'Ref');
-    if (refTag && refTag.value === specId) {
-      return true;
-    }
-  }
-  return false;
+
+  return data.transactions.edges.length > 0;
 }
 
 /**

@@ -169,7 +169,7 @@ export async function createSpec(content, metadata) {
 
 /**
  * Create a stamp transaction using the new Stamp Protocol
- * Uses Data-Source, Protocol-Name, and Action tags
+ * Uses Data-Source (spec ID) and Protocol-Name tags
  * Prevents same wallet from stamping same resource more than once
  * @param {string} specId - The transaction ID of the spec to stamp
  * @returns {Promise<string>} The transaction ID of the stamp
@@ -185,12 +185,10 @@ export async function stampSpec(specId) {
   
   const tx = await arweave.createTransaction({ data });
   
-  // New Stamp Protocol tags
+  // Stamp protocol tags
   tx.addTag('Content-Type', 'application/json');
-  tx.addTag('Data-Source', 'SYHBhGAmBo6fgAkINNoRtumOzxNB8-JFv2tPhBuNk5c');
+  tx.addTag('Data-Source', specId);
   tx.addTag('Protocol-Name', 'Stamp');
-  tx.addTag('Action', 'Write-Stamp');
-  tx.addTag('Ref', specId);
   tx.addTag('Timestamp', Date.now().toString());
   
   // Use dispatch() for bundled ANS-104 transactions (faster, cheaper)
